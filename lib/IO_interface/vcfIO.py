@@ -56,6 +56,9 @@ class VcfRecord():
 
     def get_qual(self):
         return float(self.vcf_line_split[5])
+        
+    def get_filter(self):
+        return self.vcf_line_split[6]
 
     def is_indel(self):
         """Check if this variant is an insertion of deletion"""
@@ -158,27 +161,27 @@ class VcfRecord():
             return None
 
 
-def get_all_genotype_tag_value(self, genotype_tag, sample_list=None):
-    """Extract the values of a specific tag from the genotype string for all samples.
-    The order of the values can be  different from the order in the file."""
-    all_values = []
-    if not self.genotype_format_number.has_key(genotype_tag):
-        raise NoSuchTagException
-    if sample_list:
-        genotype_list = []
-        for sample in sample_list:
-            genotype_list.append(self.genotypes.get(sample))
-    else:
-        genotype_list = self.genotypes.values()
-    for genotype in genotype_list:
-        if genotype == '.' or genotype == './.':
-            all_values.append(None)
+    def get_all_genotype_tag_value(self, genotype_tag, sample_list=None):
+        """Extract the values of a specific tag from the genotype string for all samples.
+        The order of the values can be  different from the order in the file."""
+        all_values = []
+        if not self.genotype_format_number.has_key(genotype_tag):
+            raise NoSuchTagException
+        if sample_list:
+            genotype_list = []
+            for sample in sample_list:
+                genotype_list.append(self.genotypes.get(sample))
         else:
-            if self.genotype_format_number[genotype_tag] < len(genotype.split(':')):
-                all_values.append(genotype.split(':')[self.genotype_format_number[genotype_tag]])
-            else:
+            genotype_list = self.genotypes.values()
+        for genotype in genotype_list:
+            if genotype == '.' or genotype == './.':
                 all_values.append(None)
-    return all_values
+            else:
+                if self.genotype_format_number[genotype_tag] < len(genotype.split(':')):
+                    all_values.append(genotype.split(':')[self.genotype_format_number[genotype_tag]])
+                else:
+                    all_values.append(None)
+        return all_values
 
     def get_valid_genotype_per_sample(self, genotype_quality_threshold=0, minimum_depth=0, sample_list=None):
         """return a list of valid genotype and their associated sample name."""
@@ -222,10 +225,28 @@ def get_all_genotype_tag_value(self, genotype_tag, sample_list=None):
 
     def is_phased_with_previous(self, sample):
         geno = self.get_genotype(sample)
-        if geno:
-            return len(self.get_genotype(sample).split('|')) > 1
-        else:
-            False
+        try:
+            HP_tag = self.get_genotype_tag_value('HP', sample)
+        except NoSuchTagException:
+            HP_tag = None
+        if geno and len(self.get_genotype(sample).split('|'))>1:
+            return True
+        elif HP_tag:
+            return True
+        else: False
+
+    def get_phase_with_previous(self, sample):
+        try:
+            HP_tag = self.get_genotype_tag_value('HP', sample)
+        except NoSuchTagException:
+            return None
+        if HP_tag=='.':
+            return None
+
+        h1,h2=HP_tag.split(',')
+        prev_pos, h1=h1.split('-')
+        prev_pos, h2=h2.split('-')
+        return prev_pos, '{}|{}'.format(int(h1)-1,int(h2)-1)
 
     def set_id(self, id):
         self.vcf_line_split[2] = id
@@ -273,7 +294,7 @@ class VcfReader():
 
     def get_sample_names(self):
         """return the sample name from the header"""
-        return self.all_samples
+        return copy.copy(self.all_samples)
 
     def get_header_lines(self):
         """return the header lines in one string"""
@@ -288,12 +309,20 @@ class PhasedVcfRecord():
         self.vcf_sample_references = sample_references
         self.all_alternates = []
         self._construct_phased_genotype()
+        self._current=0
 
     def __iter__(self):
         """Allow the object to be used as an iterator"""
-        if not self.iterator:
-            self.iterator = iter(self.vcf_records)
-            return self.iterator
+        return self
+
+
+    def next(self):
+        if self._current >= len(self.vcf_records):
+            self._current=0
+            raise StopIteration
+        else:
+            self._current += 1
+            return self.vcf_records[self._current - 1]
 
     def _construct_phased_genotype(self):
         """This method will create a list of genotype one for each sample along with minimum genotype quality and depth encountered."""
