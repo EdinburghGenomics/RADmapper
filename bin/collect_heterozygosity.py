@@ -26,6 +26,7 @@ from IO_interface import vcfIO
 
 
 
+
 # borrowed from RAD_sex_specific_markers.py
 def count_homo_het_geno(vcf_record, list_sample):
     support_het = support_hom = 0
@@ -96,18 +97,40 @@ def get_male_female_heterozygosity(vcf_file, list_male,list_female,list_father,l
     return het_table
 
 def main():
-    vcf_file="all_consensus_samtools1_snps_whitelist.vcf"
-    family_file = "all_families_minus_failed.txt"
+
+    argparser = _prepare_argparser()
+    args = argparser.parse_args()
+    
+    vcf_file=args.vcf_file
+    family_file = args.family_file
+    
     
     list_male,list_female,list_father,list_mother = get_male_female_samples(family_file)
     het_table = get_male_female_heterozygosity(vcf_file,list_male,list_female,list_father, list_mother)
     
-    with open('all_consensus_samtools1_snps_whitelist_heterozygosity.txt', 'w') as out:
+    out_file = args.get(out_file,"/dev/stdout")
+    with open(out_file, 'w') as out:
         out.write("contig\tsire_samples\tvalid_sire_samples\tdam_samples\tvalid_dam_samples\tmale_samples\tvalid_male_samples\tfemale_samples\tvalid_female_samples\tsire_het\tdam_het\tmale_het\tfemale_het\tsire_hom\tdam_hom\tmale_hom\tfemale_hom\n")
         for entry in het_table:
             sys.stderr.write('entry: %s__%s\n' %(entry[0],entry[1]))
             sys.stderr.write('%s\n' % het_table[entry][0])
             out.write('%s__%s\t%s\n' %(entry[0],entry[1],'\t'.join(str(i) for i in het_table[entry])))
+        
+def _prepare_argparser():
+    """Prepare optparser object. New arguments will be added in this
+    function first.
+    """
+    description = """"""
+
+    argparser = ArgumentParser(description=description)
+
+    argparser.add_argument("-v","--vcf_file",dest="vcf_file",type=str, required=True,
+                         help="Vcf file from which the stats will be gathered.")
+    argparser.add_argument("-f", "--family_file", dest="family_file", type=str, required=True
+                           help="File describing sex and parentage of the individuals in the vcf file")
+    argparser.add_argument("-o", "--out_file", dest="out_file", type=str,
+                           help="Output file destination")
+    return argparser
         
 if __name__ == "__main__":
     main() 
