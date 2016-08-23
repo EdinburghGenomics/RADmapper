@@ -23,7 +23,7 @@ import os
 from collections import defaultdict
 from utils import utils_logging
 from IO_interface import vcfIO
-
+from argparse import ArgumentParser
 
 
 
@@ -108,7 +108,7 @@ def main():
     list_male,list_female,list_father,list_mother = get_male_female_samples(family_file)
     het_table = get_male_female_heterozygosity(vcf_file,list_male,list_female,list_father, list_mother)
     
-    out_file = args.get(out_file,"/dev/stdout")
+    out_file = vars(args).get("out_file","/dev/stdout")
     with open(out_file, 'w') as out:
         out.write("contig\tsire_samples\tvalid_sire_samples\tdam_samples\tvalid_dam_samples\tmale_samples\tvalid_male_samples\tfemale_samples\tvalid_female_samples\tsire_het\tdam_het\tmale_het\tfemale_het\tsire_hom\tdam_hom\tmale_hom\tfemale_hom\n")
         for entry in het_table:
@@ -126,7 +126,7 @@ def _prepare_argparser():
 
     argparser.add_argument("-v","--vcf_file",dest="vcf_file",type=str, required=True,
                          help="Vcf file from which the stats will be gathered.")
-    argparser.add_argument("-f", "--family_file", dest="family_file", type=str, required=True
+    argparser.add_argument("-f", "--family_file", dest="family_file", type=str, required=True,
                            help="File describing sex and parentage of the individuals in the vcf file")
     argparser.add_argument("-o", "--out_file", dest="out_file", type=str,
                            help="Output file destination")
