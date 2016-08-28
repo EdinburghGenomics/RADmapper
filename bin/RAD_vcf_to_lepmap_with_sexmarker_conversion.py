@@ -103,7 +103,7 @@ and female) 1 for male 2 for female
 6th just put 0
 7th onwards markers (both alleles are coded separated by space)"""
 
-def vcf_to_lepmap(vcf_file, output_file, family_file, genotype_quality_threshold=20, max_prop_missing=.5):
+def vcf_to_lepmap(vcf_file, output_file, family_file, genotype_quality_threshold, max_prop_missing, min_het_female, max_het_male,max_het_sire):
     file_handle = utils_logging.open_input_file(vcf_file, pipe=False)
     reader = vcfIO.VcfReader(file_handle)
     all_samples_in_file = reader.get_sample_names()
@@ -174,7 +174,7 @@ def vcf_to_lepmap(vcf_file, output_file, family_file, genotype_quality_threshold
         #        convert = True
         
         # new criteria from R plot filtering
-        if(support_for_heterozygous_female>20 and support_for_heterozygous_male<=1 and support_for_heterozygous_sire<=1):
+        if(support_for_heterozygous_female>= min_het_female and support_for_heterozygous_male<= max_het_male and support_for_heterozygous_sire<= max_het_sire):
             convert=True
 
         # TODO sort this out as it probably gets rid of sex specific markers by accident, may be letting those that pass the convert test through would be enough
@@ -281,7 +281,7 @@ def main():
         utils_logging.init_logging(logging.DEBUG)
 
     vcf_to_lepmap(options.input_vcf_file, options.output_file, options.family_file,
-                  options.geno_qual_threshold, options.max_prop_missing)
+                  options.geno_qual_threshold, options.max_prop_missing, options.min_female_het, options.max_male_het, options.max_sire_het)
 
 
 def _prepare_optparser():
@@ -303,6 +303,12 @@ def _prepare_optparser():
                          help="The genotype quality threshold above which genotypes will be used. Default: %default")
     optparser.add_option("-x", "--max_prop_missing", dest="max_prop_missing", type="float", default=.5,
                          help="The maximum of missing samples across all populations. Default: %default")
+    optparser.add_option("-m", "--min_female_het", dest="min_female_het", type="int",default=10,
+                         help="The minimum number of heterozygous females to be considered a sexmarker. Default: %default")
+    optparser.add_option("-n", "--max_male_het", dest="max_male_het", type="int",default=1,
+                         help="The maximum number of heterozygous males to be considered a sexmarker. Default: %default")
+    optparser.add_option("-s", "--max_sire_het", dest="max_sire_het", type="int",default=0,
+                         help="The maximum number of heterozygous sires to be considered a sexmarker. Default: %default")                         
     optparser.add_option("--phased", dest="phased", action="store_true", default=False,
                          help="Use Phasing information (if available) to create larger markers. Default: %default")
     optparser.add_option("--debug", dest="debug", action="store_true", default=False,

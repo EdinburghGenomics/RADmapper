@@ -8,67 +8,111 @@ Utilites to convert the markers ids of linkage groups back to the #CHROM labels 
 
 First part creates the linkage file with marker id replaced with #CHROM label, second step combines the results with the table generated with collect_heterozygosity.py
 
-TODO take filenames from command line and split into two separate parts
 '''
+from argparse import ArgumentParser
 
 test_nlines=99999999
-contigs = []
-# list of contigs were the line number corresponds to the marker number in LG*.eva.txt
-with open('all_consensus_samtools1_snps_whitelist_SNP_lepmap_uniq.markers','r') as of:
-    for line in of:
-        line = line.strip()
-        
-        contigs.append(line)
-
-# dictionary of with one entry per LG, each containing a set of contig labels corresponding to the marker number        
-sets_perLG = {}
-
-# File per LG giving marker number and distance for males and females in cM
-for i in range(1,22):
-    sets_perLG[i] = set()
-    with open('all_consensus_samtools1_snps_whitelist_SNP_lepmap_filt_lod10_map_ordered%s.eval.txt' %i,'r') as of:
-        counter = 0
+def parse_marker_list(marker_file):
+    contigs = []
+    # list of contigs were the line number corresponds to the marker number in LG*.eva.txt
+    with open('all_consensus_samtools1_snps_whitelist_SNP_lepmap_uniq.markers','r') as of:
         for line in of:
-            
-            if counter > test_nlines:
-                break
-            
             line = line.strip()
-            if line.startswith('#'):
-                continue
-            counter +=1
-            cols = line.split('\t')
-            info_tuple = tuple([i,contigs[int(cols[0])+1].replace(':','__'),counter,cols[0]] + cols[1:3])
-            sets_perLG[i].add(info_tuple)
+            
+            contigs.append(line)
+    return contigs
 
-print(str(sets_perLG))
-
-# Table per marker with values about valid samples/heterozygosity, etc
-with open('all_consensus_samtools1_snps_whitelist_heterozygosity.txt','r') as of:
-    for counter,line in enumerate(of):
-        line = line.strip()
-        line = line.split('\t')
-        if counter == 0:
-            line.extend(["LG","Marker_index", "male_distance","female_distance"])
-            print('\t'.join(line))
-        else:
-            # get list of first value of each tuple in the set of linkage group
-            def scan(marker_label):
-                for v in sets_perLG.values():
-                    for info_tuple in v:
-                        if info_tuple[1] == marker_label:
-                            return info_tuple
-
-            #lg_found = [k for k, v in sets_perLG.items() if line[0] in [v2[0] for v2 in v]]
-            #assert len(lg_found) <=1
-                         
-            lg_info_tuple = scan(line[0])
-            if lg_info_tuple:
-                line.append(str(lg_info_tuple[0]))
-                line.append(str(lg_info_tuple[2]))
-                line.append(lg_info_tuple[4])
-                line.append(lg_info_tuple[5])
+def convert_LGs(lg_file,contigs):
+    # dictionary of with one entry per LG, each containing a set of contig labels corresponding to the marker number        
+    sets_perLG = {}
+    lg = 0
+    # File per LG giving marker number and distance for males and females in cM
+    for file in lg_file:
+        lg+=1
+        sets_perLG[lg] = set()
+        with open(file,'r') as of:
+            counter = 0
+            for line in of:
                 
+                if counter > test_nlines:
+                    break
+                
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                counter +=1
+                cols = line.split('\t')
+                info_tuple = tuple([lg,contigs[int(cols[0])+1].replace(':','__'),counter,cols[0]] + cols[1:3])
+                sets_perLG[lg].add(info_tuple)
+
+    return sets_perLG
+
+def extend_het_table(het_file,sets_perLG,out_file):
+    # Table per marker with values about valid samples/heterozygosity, etc
+    with open(het_file,'r') as of:
+        for counter,line in enumerate(of):
+            line = line.strip()
+            line = line.split('\t')
+            if counter == 0:
+                line.extend(["LG","Marker_index", "male_distance","female_distance"])
+                out_file.write('\t'.join(line))
+                out_file.write('\n')
             else:
-                line.extend(['0','NA','NA','NA'])
-            print('\t'.join(line))
+                # get list of first value of each tuple in the set of linkage group
+                def scan(marker_label):
+                    for v in sets_perLG.values():
+                        for info_tuple in v:
+                            if info_tuple[1] == marker_label:
+                                return info_tuple
+
+                #lg_found = [k for k, v in sets_perLG.items() if line[0] in [v2[0] for v2 in v]]
+                #assert len(lg_found) <=1
+                             
+                lg_info_tuple = scan(line[0])
+                if lg_info_tuple:
+                    line.append(str(lg_info_tuple[0]))
+                    line.append(str(lg_info_tuple[2]))
+                    line.append(lg_info_tuple[4])
+                    line.append(lg_info_tuple[5])
+                    
+                else:
+                    line.extend(['0','NA','NA','NA'])
+                out_file.write('\t'.join(line))
+                out_file.write('\n')
+            
+def main():
+
+    argparser = _prepare_argparser()
+    args = argparser.parse_args()
+    
+    marker_file=args.marker_file
+    lg_file = args.lg_file
+    het_file = args.het_file
+    
+    contigs = parse_marker_list(marker_file)
+    sets_perLG = convert_LGs(lg_file,contigs)
+        
+    out_file = vars(args).get("out_file","/dev/stdout")
+    with open(out_file, 'w') as out:
+        extend_het_table(het_file,sets_perLG,out)
+        
+def _prepare_argparser():
+    """Prepare optparser object. New arguments will be added in this
+    function first.
+    """
+    description = """"""
+
+    argparser = ArgumentParser(description=description)
+
+    argparser.add_argument("-m","--marker_file",dest="marker_file",type=str, required=True,
+                         help="File containing a list of contigs were the line number corresponds to the marker number in LG*.eva.txt")
+    argparser.add_argument("-l", "--lg_file", dest="lg_file", type=str, required=True, nargs="+", 
+                           help="Files containing ordered and filtered LGs generated by lepmap2. Order of files determines LG number in output table")
+    argparser.add_argument("-e", "--het_file", dest="het_file", type=str, required=True,
+                           help="File to which the markers are to be appended, initial output of collect_heterozygosity.py")
+    argparser.add_argument("-o", "--out_file", dest="out_file", type=str,
+                           help="Output file ")
+    return argparser
+        
+if __name__ == "__main__":
+    main() 
