@@ -301,8 +301,10 @@ class Phased_vcf_reader():
         self.ordered_sample = []
         for sample in self.reader.get_sample_names():
             self.ordered_sample.append(sample)
-        self.ordered_sample.remove(self.mother)
-        self.ordered_sample.remove(self.father)
+        if self.mother in self.ordered_sample:
+            self.ordered_sample.remove(self.mother)
+        if self.father in self.ordered_sample:
+            self.ordered_sample.remove(self.father)
 
     def read(self):
 
